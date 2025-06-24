@@ -1,0 +1,167 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+local teleportSpeed = 50
+local flightForceY = 50
+local forwardTeleportDistance = 15
+
+local isFlying = false
+local flyDirection = 0
+local flightVelocity = Instance.new("BodyVelocity")
+flightVelocity.MaxForce = Vector3.new(0, math.huge, 0)
+flightVelocity.P = 500
+flightVelocity.Velocity = Vector3.zero
+
+-- UI Buttons
+local function createButtons()
+	local screenGui = Instance.new("ScreenGui")
+	screenGui.Name = "FlightButtons"
+	screenGui.ResetOnSpawn = false
+	screenGui.Parent = player:WaitForChild("PlayerGui")
+
+	local function makeHoldButton(name, position, direction)
+		local button = Instance.new("TextButton")
+		button.Name = name
+		button.Size = UDim2.new(0, 100, 0, 50)
+		button.Position = position
+		button.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+		button.TextColor3 = Color3.new(1, 1, 1)
+		button.Text = name
+		button.BackgroundTransparency = 0.2
+		button.Font = Enum.Font.GothamBold
+		button.TextScaled = true
+		button.Parent = screenGui
+
+		button.MouseButton1Down:Connect(function()
+			flyDirection = direction
+		end)
+		button.MouseButton1Up:Connect(function()
+			flyDirection = 0
+		end)
+
+		button.TouchLongPress:Connect(function(_, state)
+			if state == Enum.UserInputState.Begin then
+				flyDirection = direction
+			elseif state == Enum.UserInputState.End then
+				flyDirection = 0
+			end
+		end)
+	end
+
+	local function makeClickButton(name, position, callback)
+		local button = Instance.new("TextButton")
+		button.Name = name
+		button.Size = UDim2.new(0, 100, 0, 50)
+		button.Position = position
+		button.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+		button.TextColor3 = Color3.new(1, 1, 1)
+		button.Text = name
+		button.BackgroundTransparency = 0.2
+		button.Font = Enum.Font.GothamBold
+		button.TextScaled = true
+		button.Parent = screenGui
+
+		button.MouseButton1Click:Connect(callback)
+		button.TouchTap:Connect(callback)
+	end
+
+	makeHoldButton("FlyUp", UDim2.new(1, -110, 0.6, 0), 1)
+	makeHoldButton("FlyDown", UDim2.new(1, -110, 0.75, 0), -1)
+
+	makeClickButton("Teleport", UDim2.new(1, -110, 0.45, 0), function()
+		local character = player.Character
+		if character and character:FindFirstChild("HumanoidRootPart") then
+			local root = character.HumanoidRootPart
+			local direction = camera.CFrame.LookVector
+			root.CFrame = root.CFrame + direction * forwardTeleportDistance
+		end
+	end)
+end
+
+-- Character invisibility, noclip, fly, etc.
+local function setupCharacter(character)
+	local humanoid = character:WaitForChild("Humanoid")
+	local rootPart = character:WaitForChild("HumanoidRootPart")
+
+	-- Hide name tag
+	local head = character:FindFirstChild("Head")
+	if head then
+		for _, obj in ipairs(head:GetChildren()) do
+			if obj:IsA("BillboardGui") then
+				obj:Destroy()
+			end
+		end
+	end
+	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+
+	-- Make invisible + noclip
+	local function makeInvisible()
+		for _, part in ipairs(character:GetDescendants()) do
+			if part:IsA("BasePart") then
+				part.Transparency = 1
+				part.CanCollide = false
+			elseif part:IsA("Decal") then
+				part.Transparency = 1
+			end
+		end
+	end
+
+	task.spawn(function()
+		while character and character.Parent do
+			makeInvisible()
+			task.wait(1)
+		end
+	end)
+
+	-- Disable walk animations
+	for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
+		track:Stop()
+	end
+	humanoid.Running:Connect(function(speed)
+		if speed > 0 then
+			for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
+				track:Stop()
+			end
+		end
+	end)
+
+	humanoid.WalkSpeed = 0
+	flightVelocity.Parent = rootPart
+
+	-- Noclip enforcement
+	RunService.RenderStepped:Connect(function()
+		for _, part in ipairs(character:GetDescendants()) do
+			if part:IsA("BasePart") then
+				part.CanCollide = false
+			end
+		end
+	end)
+
+	-- Smooth forward glide
+	RunService.RenderStepped:Connect(function(dt)
+		if humanoid.MoveDirection.Magnitude > 0 then
+			local step = humanoid.MoveDirection.Unit * teleportSpeed * dt
+			rootPart.CFrame = rootPart.CFrame + step
+		end
+	end)
+
+	-- Flight control
+	RunService.Heartbeat:Connect(function()
+		if flyDirection ~= 0 then
+			isFlying = true
+			flightVelocity.Velocity = Vector3.new(0, flightForceY * flyDirection, 0)
+		elseif isFlying then
+			flightVelocity.Velocity = Vector3.zero
+		end
+	end)
+end
+
+-- Init
+createButtons()
+
+if player.Character then
+	setupCharacter(player.Character)
+end
+player.CharacterAdded:Connect(setupCharacter)
