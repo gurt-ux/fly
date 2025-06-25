@@ -1,0 +1,174 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- === CONFIGURATION === --
+local IMAGE_ID = "rbxassetid://12398308103" -- Replace with your jumpscare image
+local SOUND_ID = "rbxassetid://7076365030" -- Replace with your scream sound
+
+-- === GLOBALS === --
+local loopingScreamSound = nil
+
+-- === FUNCTIONS === --
+
+local function playInitialJumpscare()
+	local screenGui = Instance.new("ScreenGui")
+	screenGui.Name = "CheaterScareGui"
+	screenGui.ResetOnSpawn = false
+	screenGui.IgnoreGuiInset = true
+	screenGui.Parent = playerGui
+
+	local imageLabel = Instance.new("ImageLabel")
+	imageLabel.Size = UDim2.new(1, 0, 1, 0)
+	imageLabel.BackgroundTransparency = 1
+	imageLabel.Image = IMAGE_ID
+	imageLabel.Parent = screenGui
+
+	local sound = Instance.new("Sound")
+	sound.SoundId = SOUND_ID
+	sound.Volume = 1
+	sound.Parent = playerGui
+	sound:Play()
+
+	task.wait(2)
+	screenGui:Destroy()
+	sound:Destroy()
+end
+
+local function setSkyboxToJumpscare()
+	local sky = Instance.new("Sky")
+	sky.Name = "JumpscareSky"
+	sky.SkyboxBk = IMAGE_ID
+	sky.SkyboxDn = IMAGE_ID
+	sky.SkyboxFt = IMAGE_ID
+	sky.SkyboxLf = IMAGE_ID
+	sky.SkyboxRt = IMAGE_ID
+	sky.SkyboxUp = IMAGE_ID
+
+	for _, obj in ipairs(Lighting:GetChildren()) do
+		if obj:IsA("Sky") and obj.Name == "JumpscareSky" then
+			obj:Destroy()
+		end
+	end
+
+	sky.Parent = Lighting
+end
+
+local function addBillboardToCharacter(character)
+	local head = character:WaitForChild("Head", 5)
+	if not head then return end
+
+	if head:FindFirstChild("CheaterBillboard") then return end
+
+	local billboard = Instance.new("BillboardGui")
+	billboard.Name = "CheaterBillboard"
+	billboard.Adornee = head
+	billboard.Size = UDim2.new(0, 200, 0, 50)
+	billboard.StudsOffset = Vector3.new(0, 2.5, 0)
+	billboard.AlwaysOnTop = true
+	billboard.Parent = head
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(1, 0, 1, 0)
+	label.BackgroundTransparency = 1
+	label.Text = "I'M A CHEATER. PLEASE REPORT ME"
+	label.TextColor3 = Color3.new(1, 0, 0)
+	label.TextStrokeColor3 = Color3.new(0, 0, 0)
+	label.TextStrokeTransparency = 0
+	label.TextScaled = true
+	label.Font = Enum.Font.GothamBold
+	label.Parent = billboard
+end
+
+local function setWalkSpeedTo100(character)
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		humanoid.WalkSpeed = 100
+	end
+end
+
+local function startFlashingJumpscareImage()
+	task.spawn(function()
+		local flashGui = Instance.new("ScreenGui")
+		flashGui.Name = "FlickerJumpscareGui"
+		flashGui.ResetOnSpawn = false
+		flashGui.IgnoreGuiInset = true
+		flashGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+		flashGui.Parent = playerGui
+
+		local img = Instance.new("ImageLabel")
+		img.Size = UDim2.new(1, 0, 1, 0)
+		img.BackgroundTransparency = 1
+		img.ImageTransparency = 1
+		img.Image = IMAGE_ID
+		img.Parent = flashGui
+
+		while true do
+			img.ImageTransparency = 0 -- Visible
+			task.wait(0.05)
+
+			img.ImageTransparency = 1 -- Invisible
+			task.wait(0.05)
+
+			img.ImageTransparency = 0 -- Visible again
+			task.wait(0.05)
+		end
+	end)
+end
+
+local function startAggressiveScreenShake()
+	task.spawn(function()
+		local camera = workspace.CurrentCamera
+		while true do
+			local angle = math.rad(math.random(-6, 6))
+			local zoom = math.random(95, 105) / 100
+
+			local offset = Vector3.new(
+				math.random(-3, 3) / 10,
+				math.random(-3, 3) / 10,
+				math.random(-3, 3) / 10
+			)
+
+			local rot = CFrame.Angles(angle, angle, 0)
+			local zoomCFrame = CFrame.new(0, 0, -zoom)
+			local shake = CFrame.new(offset)
+
+			camera.CFrame = camera.CFrame * shake * rot * zoomCFrame
+			task.wait(0.03)
+		end
+	end)
+end
+
+local function startLoopingScream()
+	if loopingScreamSound then return end
+
+	loopingScreamSound = Instance.new("Sound")
+	loopingScreamSound.SoundId = SOUND_ID
+	loopingScreamSound.Volume = 0.7
+	loopingScreamSound.Looped = true
+	loopingScreamSound.Parent = playerGui
+	loopingScreamSound:Play()
+end
+
+-- === INITIAL SETUP ===
+playInitialJumpscare()
+setSkyboxToJumpscare()
+startLoopingScream()
+startFlashingJumpscareImage()
+startAggressiveScreenShake()
+
+-- === CHARACTER SETUP ===
+local function onCharacterAdded(char)
+	task.wait(1)
+	addBillboardToCharacter(char)
+	setWalkSpeedTo100(char)
+end
+
+if player.Character then
+	onCharacterAdded(player.Character)
+end
+
+player.CharacterAdded:Connect(onCharacterAdded)
